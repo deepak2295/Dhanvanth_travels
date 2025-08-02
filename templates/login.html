@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dhanvanth Portal Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #0077ff; --light-bg: #f0f2f5; --white: #ffffff; --shadow: 0 4px 20px rgba(0,0,0,0.1); --error: #e74c3c; --success: #27ae60; }
+        body { font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--light-bg); margin: 0; }
+        .login-box { background: var(--white); padding: 40px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; width: 100%; max-width: 380px; }
+        .login-box h2 { margin-bottom: 20px; color: #333; }
+        .logo { width: 150px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555;}
+        .phone-input-container { display: flex; align-items: center; }
+        .country-code { padding: 12px; border: 1px solid #ccc; border-right: none; border-radius: 8px 0 0 8px; background-color: #f0f2f5; font-size: 16px; }
+        input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        input[type="tel"] { border-left: none; border-radius: 0 8px 8px 0; }
+        button { width: 100%; padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background-color 0.3s; margin-top: 10px; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        #otp-group { display: none; }
+        .message { margin-top: 15px; font-weight: 600; min-height: 20px; }
+        .error { color: var(--error); }
+        .success { color: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
+        <h2>Portal Login</h2>
+        <p id="message-area" class="message"></p>
+
+        <form id="otpLoginForm">
+            <div class="form-group" id="phone-group">
+                <label for="phone">Phone Number</label>
+                <div class="phone-input-container">
+                    <span class="country-code">+91</span>
+                    <input type="tel" id="phone" placeholder="9876543210" required maxlength="10" pattern="\d{10}">
+                </div>
+                <button type="button" id="send-otp-btn" onclick="requestOtp()">Send OTP</button>
+            </div>
+
+            <div class="form-group" id="otp-group">
+                <label for="otp">Enter 6-Digit OTP</label>
+                <input type="text" id="otp" placeholder="Enter OTP from SMS" required autocomplete="one-time-code">
+                <button type="submit">Verify & Login</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const phoneGroup = document.getElementById('phone-group');
+        const otpGroup = document.getElementById('otp-group');
+        const messageArea = document.getElementById('message-area');
+        const sendOtpBtn = document.getElementById('send-otp-btn');
+        const phoneInput = document.getElementById('phone');
+
+        async function requestOtp() {
+            const phone = phoneInput.value;
+            // Validate for exactly 10 digits
+            if (!phone || !/^\d{10}$/.test(phone)) {
+                messageArea.textContent = 'Please enter a valid 10-digit phone number.';
+                messageArea.className = 'message error';
+                return;
+            }
+
+            sendOtpBtn.disabled = true;
+            messageArea.textContent = 'Sending OTP...';
+            messageArea.className = 'message';
+
+            try {
+                // Use the unified API endpoint
+                const response = await fetch('/api/send_otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    messageArea.textContent = result.message;
+                    messageArea.className = 'message success';
+                    phoneGroup.style.display = 'none';
+                    otpGroup.style.display = 'block';
+                    document.getElementById('otp').focus();
+                } else {
+                    messageArea.textContent = result.error || 'An error occurred.';
+                    messageArea.className = 'message error';
+                    sendOtpBtn.disabled = false;
+                }
+            } catch (error) {
+                messageArea.textContent = 'Could not connect to the server.';
+                messageArea.className = 'message error';
+                sendOtpBtn.disabled = false;
+            }
+        }
+
+        document.getElementById('otpLoginForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const phone = phoneInput.value;
+            const otp = document.getElementById('otp').value;
+            const submitBtn = this.querySelector('button[type="submit"]');
+
+            submitBtn.disabled = true;
+            messageArea.textContent = 'Verifying...';
+            messageArea.className = 'message';
+
+            try {
+                // Use the unified API endpoint
+                const response = await fetch('/api/verify_otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, otp })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.redirect) {
+                    messageArea.textContent = 'Login successful! Redirecting...';
+                    messageArea.className = 'message success';
+                    // Redirect to the URL provided by the backend
+                    window.location.href = result.redirect;
+                } else {
+                    messageArea.textContent = result.error || 'Login failed.';
+                    messageArea.className = 'message error';
+                    submitBtn.disabled = false;
+                }
+            } catch (error) {
+                messageArea.textContent = 'An error occurred during verification.';
+                messageArea.className = 'message error';
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Allow pressing Enter to trigger Send OTP
+        phoneInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendOtpBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>

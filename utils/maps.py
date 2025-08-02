@@ -1,66 +1,84 @@
 # utils/maps.py
 
-import requests
 import os
-# Your OpenRouteService API key
-API_KEY = os.getenv("ORS_API_KEY")
+import requests
+from dotenv import load_dotenv
+
+# This automatically finds and loads your .env file
+load_dotenv()
+
+# Reads the API key from your environment
+Maps_API_KEY = os.getenv("MAPS_API_KEY")
+print("✅ Loaded Google Maps Key from .env")
+
+if not Maps_API_KEY:
+    raise ValueError("Maps_API_KEY not found in environment variables. Please check your .env file.")
+
+def is_in_bengaluru(geocode_results):
+    """Checks if a geocoded address from Google Maps is within Bengaluru."""
+    if not geocode_results:
+        return False
+
+    # Valid names for Bengaluru in Google Maps address components
+    valid_localities = ["Bengaluru", "Bangalore Urban"]
+    
+    # Check the address components for a match
+    for component in geocode_results[0].get('address_components', []):
+        if any(t in component['types'] for t in ['locality', 'administrative_area_level_2']):
+            if component.get('long_name') in valid_localities:
+                return True
+    return False
 
 def get_route_details(pickup, drop):
     """
-    Uses OpenRouteService to get distance, duration, and tracking URL between pickup and drop.
+    Gets route details, biasing the search to and restricting the results to the Bengaluru area.
     """
-    geocode_url = "https://api.openrouteservice.org/geocode/search"
-    directions_url = "https://api.openrouteservice.org/v2/directions/driving-car"
+    geocode_base_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    directions_base_url = "https://maps.googleapis.com/maps/api/directions/json"
+    
+    # This tells Google to strongly prefer results within Bengaluru, India
+    components_filter = "locality:Bengaluru|country:IN"
 
-    # Geocode addresses
-    pickup_coords = get_coordinates(pickup, geocode_url)
-    drop_coords = get_coordinates(drop, geocode_url)
+    # 1. Geocode and validate the PICKUP location
+    origin_params = {'address': pickup, 'key': Maps_API_KEY, 'components': components_filter}
+    origin_res = requests.get(geocode_base_url, params=origin_params).json()
+    
+    if not origin_res.get('results') or not is_in_bengaluru(origin_res.get('results')):
+        return {"error": f"Sorry, the pickup location '{pickup}' is outside our service area (Bengaluru)."}
+    origin_place_id = origin_res['results'][0]['place_id']
 
-    if not pickup_coords or not drop_coords:
-        return None
+    # 2. Geocode and validate the DROP-OFF location
+    dest_params = {'address': drop, 'key': Maps_API_KEY, 'components': components_filter}
+    dest_res = requests.get(geocode_base_url, params=dest_params).json()
 
-    # Directions
-    headers = {
-        "Authorization": API_KEY,
-        "Content-Type": "application/json"
+    if not dest_res.get('results') or not is_in_bengaluru(dest_res.get('results')):
+        return {"error": f"Sorry, the drop-off location '{drop}' is outside our service area (Bengaluru)."}
+    destination_place_id = dest_res['results'][0]['place_id']
+
+    # 3. Get directions using the validated place_ids for accuracy
+    directions_params = {
+        'origin': f'place_id:{origin_place_id}',
+        'destination': f'place_id:{destination_place_id}',
+        'key': Maps_API_KEY
     }
-    body = {
-        "coordinates": [pickup_coords, drop_coords]
-    }
-    response = requests.post(directions_url, json=body, headers=headers)
-    data = response.json()
+    directions_res = requests.get(directions_base_url, params=directions_params).json()
 
-    try:
-        summary = data["features"][0]["properties"]["summary"]
-        distance_km = round(summary["distance"] / 1000, 2)
-        duration_min = round(summary["duration"] / 60, 2)
-        fare = calculate_fare(distance_km)
-
+    if directions_res.get('status') == 'OK':
+        leg = directions_res['routes'][0]['legs'][0]
         return {
-            "distance": f"{distance_km} km",
-            "duration": f"{duration_min} mins",
-            "fare": fare,
-            "tracking_url": f"https://www.openstreetmap.org/directions?engine=graphhopper_car&route={pickup_coords[1]},{pickup_coords[0]};{drop_coords[1]},{drop_coords[0]}"
+            "distance": leg["distance"]["text"],
+            "duration": leg["duration"]["text"]
         }
-    except Exception as e:
-        print("Error parsing directions:", e)
-        return None
+    else:
+        print(f"❌ Error getting route details: {directions_res.get('status')}")
+        return {"error": "A route could not be found between the specified locations."}
 
-def get_coordinates(location, geocode_url):
-    """Get lat/lon from place name"""
-    params = {
-        "api_key": API_KEY,
-        "text": location,
-        "size": 1
-    }
-    response = requests.get(geocode_url, params=params)
-    try:
-        coords = response.json()["features"][0]["geometry"]["coordinates"]
-        return coords  # [lon, lat]
-    except:
-        return None
-
-def calculate_fare(km):
-    base = 50
-    per_km = 15
-    return round(base + max(0, km - 3) * per_km, 2)
+def get_readable_address(lat, lng):
+    """Converts latitude and longitude to a human-readable address."""
+    geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {'latlng': f'{lat},{lng}', 'key': Maps_API_KEY}
+    response = requests.get(geocode_url, params=params).json()
+    
+    if response.get('status') == 'OK':
+        return response['results'][0]['formatted_address']
+    return "Unknown Address"

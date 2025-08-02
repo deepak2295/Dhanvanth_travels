@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dhanvanth Tours & Travels Dashboard</title>
+  <!-- Inline style.css content -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_Maps_API_KEY&libraries=places"></script>
+</head>
+<body>
+  <button class="menu-toggle" onclick="toggleSidebar()">☰ Menu</button>
+  <div class="container">
+    <aside class="sidebar" id="sidebar">
+      <!-- Corrected path for logo.png using url_for -->
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo" />
+      <nav>
+        <ul>
+          <li onclick="selectSection('dashboard')">Dashboard</li>
+          <li onclick="selectSection('locations')">Locations</li>
+          <li onclick="selectSection('customers')">Customers</li>
+          <li onclick="selectSection('drivers')">Driver Management</li>
+          <li onclick="selectSection('vehicles')">Vehicle Management</li>
+          <li onclick="selectSection('owners')">Owner Management</li>
+          <li onclick="selectSection('bookings')">Bookings</li>
+          <li onclick="selectSection('assigned')">Assigned Bookings</li>
+          <li onclick="selectSection('manualBooking')">Manual Booking</li> <!-- New: Manual Booking Tab -->
+          <li onclick="selectSection('pricing')">Price Management</li>
+          <li onclick="selectSection('coupons')">Coupon Generation</li>
+          <li onclick="selectSection('sendMessage')">Send Message</li>
+          <li onclick="selectSection('about')">About Us</li>
+          <li onclick="selectSection('support')">Support</li>
+        </ul>
+      </nav>
+    </aside>
+    <main class="main" id="main-content"></main>
+  </div>
+
+  <!-- Custom Modal for Alerts/Confirmations -->
+  <div id="customModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" onclick="hideModal()">&times;</span>
+      <p id="modalMessage"></p>
+      <div id="modalButtons" class="modal-buttons">
+        <button id="modalConfirmBtn" class="modal-button confirm-button" style="display:none;">Confirm</button>
+        <button id="modalCancelBtn" class="modal-button cancel-button" style="display:none;">Cancel</button>
+        <button id="modalOkBtn" class="modal-button ok-button" style="display:none;">OK</button>
+      </div>
+    </div>
+  </div>
+ <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+
+</body>
+</html>

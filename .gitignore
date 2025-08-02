@@ -1,0 +1,4 @@
+.env
+__pycache__/
+cab_booking.db
+invoices/

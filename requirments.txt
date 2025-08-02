@@ -1,5 +1,0 @@
-flask
-gunicorn
-requests
-python-dotenv
-rapidfuzz
