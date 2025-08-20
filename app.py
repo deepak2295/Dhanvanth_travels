@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, send_from_directory, session
+from firebase_functions import https_fn
+from firebase_admin import initialize_app
 import os
 import sys
 import json
@@ -1810,10 +1812,16 @@ def webhook():
             return "ok", 200
 
 
-if __name__ == "__main__":
-    # Start the pre-booking assignment thread
-    assignment_thread = threading.Thread(target=assign_prebooked_rides_periodically)
-    assignment_thread.daemon = True # Allow the main program to exit even if this thread is running
-    assignment_thread.start()
+from firebase_functions import https_fn
+from flask import Flask
 
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
+# Your existing Flask app initialization line
+app = Flask(__name__) 
+
+# All of your other code...
+
+@https_fn.on_request()
+def your_app_name(req: https_fn.Request) -> https_fn.Response:
+    """This function exports the Flask app to Firebase."""
+    with app.request_context(req):
+        return app.full_dispatch_request()
