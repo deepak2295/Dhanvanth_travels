@@ -3,144 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dhanvanth Portal Login</title>
+    <title>Dhanvanth Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root { --primary: #0077ff; --light-bg: #f0f2f5; --white: #ffffff; --shadow: 0 4px 20px rgba(0,0,0,0.1); --error: #e74c3c; --success: #27ae60; }
         body { font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--light-bg); margin: 0; }
-        .login-box { background: var(--white); padding: 40px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; width: 100%; max-width: 380px; }
-        .login-box h2 { margin-bottom: 20px; color: #333; }
+        .portal-box { background: var(--white); padding: 40px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; width: 100%; max-width: 400px; }
+        .portal-box h2 { margin-bottom: 20px; color: #333; }
         .logo { width: 150px; margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; text-align: left; }
         label { display: block; margin-bottom: 8px; font-weight: 600; color: #555;}
-        .phone-input-container { display: flex; align-items: center; }
-        .country-code { padding: 12px; border: 1px solid #ccc; border-right: none; border-radius: 8px 0 0 8px; background-color: #f0f2f5; font-size: 16px; }
         input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        input[type="tel"] { border-left: none; border-radius: 0 8px 8px 0; }
         button { width: 100%; padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background-color 0.3s; margin-top: 10px; }
         button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
-        #otp-group { display: none; }
+        button:disabled { background-color: #a0a0a0; }
         .message { margin-top: 15px; font-weight: 600; min-height: 20px; }
         .error { color: var(--error); }
         .success { color: var(--success); }
+        .toggle-link { color: var(--primary); cursor: pointer; margin-top: 20px; display: inline-block; }
+        .forgot-password-link { font-size: 14px; text-align: right; display: block; margin-top: -5px; margin-bottom: 15px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div class="login-box">
+    <div class="portal-box">
         <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
-        <h2>Portal Login</h2>
-        <p id="message-area" class="message"></p>
-
-        <form id="otpLoginForm">
-            <div class="form-group" id="phone-group">
-                <label for="phone">Phone Number</label>
-                <div class="phone-input-container">
-                    <span class="country-code">+91</span>
-                    <input type="tel" id="phone" placeholder="9876543210" required maxlength="10" pattern="\d{10}">
+        
+        <div id="login-view">
+            <h2>Portal Login</h2>
+            <p id="login-message-area" class="message"></p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required>
                 </div>
-                <button type="button" id="send-otp-btn" onclick="requestOtp()">Send OTP</button>
-            </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <a href="#" class="toggle-link forgot-password-link" onclick="toggleView('forgot')">Forgot Password?</a>
+                <button type="submit">Login</button>
+            </form>
+            <p class="toggle-link" onclick="toggleView('register')">Don't have an account? Create one</p>
+        </div>
 
-            <div class="form-group" id="otp-group">
-                <label for="otp">Enter 6-Digit OTP</label>
-                <input type="text" id="otp" placeholder="Enter OTP from SMS" required autocomplete="one-time-code">
-                <button type="submit">Verify & Login</button>
-            </div>
-        </form>
+        <div id="register-view" class="hidden">
+            <h2>Create Account</h2>
+            <p id="register-message-area" class="message"></p>
+            <form id="register-step1-form">
+                 <div class="form-group"><label for="register-email">Email Address</label><input type="email" id="register-email" required></div><button type="submit">Send Verification Code</button>
+            </form>
+            <form id="register-step2-form" class="hidden">
+                <div class="form-group"><label for="register-otp">6-Digit Code</label><input type="text" id="register-otp" required></div><button type="submit">Verify Code</button>
+            </form>
+            <form id="register-step3-form" class="hidden">
+                <div class="form-group"><label for="register-name">Full Name</label><input type="text" id="register-name" required></div>
+                <div class="form-group"><label for="register-phone">Phone Number (+91)</label><input type="tel" id="register-phone" required maxlength="10"></div>
+                <div class="form-group"><label for="register-password">Create Password</label><input type="password" id="register-password" required></div><button type="submit">Create Account</button>
+            </form>
+            <p class="toggle-link" onclick="toggleView('login')">Already have an account? Login</p>
+        </div>
+
+        <div id="forgot-view" class="hidden">
+            <h2>Reset Password</h2>
+            <p id="forgot-message-area" class="message"></p>
+            <form id="forgot-step1-form">
+                <div class="form-group"><label for="forgot-email">Enter your Email</label><input type="email" id="forgot-email" required></div><button type="submit">Send Reset Code</button>
+            </form>
+            <form id="forgot-step2-form" class="hidden">
+                <div class="form-group"><label for="forgot-otp">6-Digit Code</label><input type="text" id="forgot-otp" required></div><button type="submit">Verify Code</button>
+            </form>
+            <form id="forgot-step3-form" class="hidden">
+                <div class="form-group"><label for="forgot-password">Enter New Password</label><input type="password" id="forgot-password" required></div><button type="submit">Reset Password</button>
+            </form>
+            <p class="toggle-link" onclick="toggleView('login')">Back to Login</p>
+        </div>
     </div>
 
     <script>
-        const phoneGroup = document.getElementById('phone-group');
-        const otpGroup = document.getElementById('otp-group');
-        const messageArea = document.getElementById('message-area');
-        const sendOtpBtn = document.getElementById('send-otp-btn');
-        const phoneInput = document.getElementById('phone');
+        const loginView = document.getElementById('login-view');
+        const registerView = document.getElementById('register-view');
+        const forgotView = document.getElementById('forgot-view');
+        const views = { login: loginView, register: registerView, forgot: forgotView };
 
-        async function requestOtp() {
-            const phone = phoneInput.value;
-            // Validate for exactly 10 digits
-            if (!phone || !/^\d{10}$/.test(phone)) {
-                messageArea.textContent = 'Please enter a valid 10-digit phone number.';
-                messageArea.className = 'message error';
-                return;
-            }
+        function toggleView(viewName) {
+            Object.values(views).forEach(view => view.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+        }
 
-            sendOtpBtn.disabled = true;
-            messageArea.textContent = 'Sending OTP...';
+        async function handleApiCall(form, url, body, messageArea) {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            messageArea.textContent = 'Processing...';
             messageArea.className = 'message';
-
             try {
-                // Use the unified API endpoint
-                const response = await fetch('/api/send_otp', {
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone })
+                    body: JSON.stringify(body)
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
                     messageArea.textContent = result.message;
                     messageArea.className = 'message success';
-                    phoneGroup.style.display = 'none';
-                    otpGroup.style.display = 'block';
-                    document.getElementById('otp').focus();
-                } else {
-                    messageArea.textContent = result.error || 'An error occurred.';
-                    messageArea.className = 'message error';
-                    sendOtpBtn.disabled = false;
-                }
+                    return result;
+                } else { throw new Error(result.error || 'An error occurred.'); }
             } catch (error) {
-                messageArea.textContent = 'Could not connect to the server.';
+                messageArea.textContent = error.message;
                 messageArea.className = 'message error';
-                sendOtpBtn.disabled = false;
+                return null;
+            } finally {
+                submitBtn.disabled = false;
             }
         }
 
-        document.getElementById('otpLoginForm').addEventListener('submit', async function(event) {
-            event.preventDefault();
-
-            const phone = phoneInput.value;
-            const otp = document.getElementById('otp').value;
-            const submitBtn = this.querySelector('button[type="submit"]');
-
-            submitBtn.disabled = true;
-            messageArea.textContent = 'Verifying...';
-            messageArea.className = 'message';
-
-            try {
-                // Use the unified API endpoint
-                const response = await fetch('/api/verify_otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone, otp })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.redirect) {
-                    messageArea.textContent = 'Login successful! Redirecting...';
-                    messageArea.className = 'message success';
-                    // Redirect to the URL provided by the backend
-                    window.location.href = result.redirect;
-                } else {
-                    messageArea.textContent = result.error || 'Login failed.';
-                    messageArea.className = 'message error';
-                    submitBtn.disabled = false;
-                }
-            } catch (error) {
-                messageArea.textContent = 'An error occurred during verification.';
-                messageArea.className = 'message error';
-                submitBtn.disabled = false;
+        // --- Event Listeners for Login & Register (from previous step) ---
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { email: document.getElementById('email').value, password: document.getElementById('password').value };
+            const result = await handleApiCall(e.target, '/api/login', body, document.getElementById('login-message-area'));
+            if (result && result.redirect) window.location.href = result.redirect;
+        });
+        document.getElementById('register-step1-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { email: document.getElementById('register-email').value };
+            const result = await handleApiCall(e.target, '/api/register/send_otp', body, document.getElementById('register-message-area'));
+            if (result) {
+                e.target.classList.add('hidden');
+                document.getElementById('register-step2-form').classList.remove('hidden');
+            }
+        });
+        document.getElementById('register-step2-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { otp: document.getElementById('register-otp').value };
+            const result = await handleApiCall(e.target, '/api/register/verify_otp', body, document.getElementById('register-message-area'));
+            if (result) {
+                e.target.classList.add('hidden');
+                document.getElementById('register-step3-form').classList.remove('hidden');
+            }
+        });
+        document.getElementById('register-step3-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { name: document.getElementById('register-name').value, phone: '91' + document.getElementById('register-phone').value, password: document.getElementById('register-password').value };
+            const result = await handleApiCall(e.target, '/api/register/complete_profile', body, document.getElementById('register-message-area'));
+            if (result) {
+                document.getElementById('register-message-area').textContent = 'Account created! Redirecting to login...';
+                setTimeout(() => { toggleView('login'); }, 2000);
             }
         });
 
-        // Allow pressing Enter to trigger Send OTP
-        phoneInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                sendOtpBtn.click();
+        // --- NEW Event Listeners for Forgot Password ---
+        document.getElementById('forgot-step1-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { email: document.getElementById('forgot-email').value };
+            const result = await handleApiCall(e.target, '/api/forgot_password/send_otp', body, document.getElementById('forgot-message-area'));
+            if (result) {
+                e.target.classList.add('hidden');
+                document.getElementById('forgot-step2-form').classList.remove('hidden');
+            }
+        });
+        document.getElementById('forgot-step2-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { otp: document.getElementById('forgot-otp').value };
+            const result = await handleApiCall(e.target, '/api/forgot_password/verify_otp', body, document.getElementById('forgot-message-area'));
+            if (result) {
+                e.target.classList.add('hidden');
+                document.getElementById('forgot-step3-form').classList.remove('hidden');
+            }
+        });
+        document.getElementById('forgot-step3-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { password: document.getElementById('forgot-password').value };
+            const result = await handleApiCall(e.target, '/api/forgot_password/reset_password', body, document.getElementById('forgot-message-area'));
+            if (result) {
+                document.getElementById('forgot-message-area').textContent = 'Password reset! Redirecting to login...';
+                setTimeout(() => { toggleView('login'); }, 2000);
             }
         });
     </script>

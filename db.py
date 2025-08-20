@@ -1,318 +1,251 @@
-# db.py
+# db.py (Updated for MySQL - All functions included)
 
-import sqlite3
-from datetime import datetime, timedelta
+import mysql.connector
+from mysql.connector import errorcode
+from datetime import datetime
 
-DB_NAME = "cab_booking.db"
+# --- IMPORTANT: Configure your MySQL connection details here ---
+db_config = {
+    'host': 'localhost',
+    'user': 'cab_app_user',
+    'password': 'Deep@k80', # Make sure to use your actual password
+    'database': 'cab_booking_db'
+}
 
 def connect():
-    """Establishes a connection to the SQLite database with thread safety."""
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+    """Establishes a connection to the MySQL database."""
+    try:
+        return mysql.connector.connect(**db_config, connection_timeout=10)
+    except mysql.connector.Error as err:
+        print(f"MySQL Connection Error: {err}")
+        raise err
+
+def execute_query(query, params=None, fetch=None, many=False, commit=False):
+    """A helper function to execute database queries safely."""
+    conn = None
+    try:
+        conn = connect()
+        cursor = conn.cursor(dictionary=True, buffered=True)
+        
+        if many:
+            cursor.executemany(query, params)
+        else:
+            cursor.execute(query, params or ())
+        
+        if commit:
+            conn.commit()
+            return cursor.lastrowid if "INSERT" in query.upper() else cursor.rowcount
+        
+        if fetch == 'one':
+            return cursor.fetchone()
+        elif fetch == 'all':
+            return cursor.fetchall()
+            
+    except mysql.connector.Error as err:
+        print(f"MySQL Query Error: {err}")
+        return None
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 # ---- USER ----
 def get_user(phone):
-    """Retrieves a user by phone, including their password hash."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT id, phone, name, password_hash FROM users WHERE phone=?", (phone,))
-    user = cur.fetchone()
-    conn.close()
-    if user:
-        return {"id": user[0], "phone": user[1], "name": user[2], "password_hash": user[3]}
-    return None
+    return execute_query("SELECT * FROM users WHERE phone=%s", (phone,), fetch='one')
 
-def add_user(phone, name, password_hash):
-    """Adds a new user with a hashed password."""
-    conn = connect()
-    cur = conn.cursor()
-    try:
-        cur.execute("INSERT INTO users (phone, name, password_hash) VALUES (?, ?, ?)", (phone, name, password_hash))
-        conn.commit()
-        return cur.lastrowid
-    except sqlite3.IntegrityError:
-        return None
-    finally:
-        conn.close()
+def add_user(phone, name, password_hash, email):
+    query = "INSERT INTO users (phone, name, password_hash, email) VALUES (%s, %s, %s, %s)"
+    return execute_query(query, (phone, name, password_hash, email), commit=True)
 
 def update_user(user_id, name, phone):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE users SET name=?, phone=? WHERE id=?", (name, phone, user_id))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    return execute_query("UPDATE users SET name=%s, phone=%s WHERE id=%s", (name, phone, user_id), commit=True)
 
 def delete_user(user_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    return execute_query("DELETE FROM users WHERE id=%s", (user_id,), commit=True)
 
 def get_all_users():
-    """Retrieves all users from the database."""
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, phone, name FROM users")
-    users = cursor.fetchall()
-    conn.close()
-    return [{"id": row[0], "phone": row[1], "name": row[2]} for row in users]
+    return execute_query("SELECT id, phone, name, email FROM users", fetch='all')
 
 def update_user_name_by_phone(phone, name):
-    """Updates the name for a user identified by their phone number."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE users SET name=? WHERE phone=?", (name, phone))
-    conn.commit()
-    updated_rows = cur.rowcount
-    conn.close()
-    return updated_rows > 0
+    return execute_query("UPDATE users SET name=%s WHERE phone=%s", (name, phone), commit=True)
+
+def get_user_by_email(email):
+    return execute_query("SELECT * FROM users WHERE email=%s", (email,), fetch='one')
+
+def update_password_by_email(email, new_password_hash):
+    query = "UPDATE users SET password_hash=%s WHERE email=%s"
+    return execute_query(query, (new_password_hash, email), commit=True)
 
 # ---- OWNER ----
 def get_owner_by_email(email):
-    """Retrieves an owner by email, including their password hash."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT id, email, name, password_hash FROM owners WHERE email=?", (email,))
-    owner = cur.fetchone()
-    conn.close()
-    if owner:
-        return {"id": owner[0], "email": owner[1], "name": owner[2], "password_hash": owner[3]}
-    return None
+    return execute_query("SELECT * FROM owners WHERE email=%s", (email,), fetch='one')
 
 def get_all_owner_phone_numbers():
-    """Retrieves a list of all phone numbers from the owners table."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT phone FROM owners WHERE phone IS NOT NULL")
-    phone_numbers = [row[0] for row in cur.fetchall()]
-    conn.close()
-    return phone_numbers
+    rows = execute_query("SELECT phone FROM owners WHERE phone IS NOT NULL", fetch='all')
+    return [row['phone'] for row in rows] if rows else []
+
+def add_owner(email, phone, name, password_hash):
+    query = "INSERT INTO owners (email, phone, name, password_hash) VALUES (%s, %s, %s, %s)"
+    return execute_query(query, (email, phone, name, password_hash), commit=True)
+
+def get_all_owners():
+    return execute_query("SELECT id, email, phone, name FROM owners", fetch='all')
+
+def update_owner(owner_id, email, phone, name):
+    query = "UPDATE owners SET email=%s, phone=%s, name=%s WHERE id=%s"
+    return execute_query(query, (email, phone, name, owner_id), commit=True)
+
+def delete_owner(owner_id):
+    return execute_query("DELETE FROM owners WHERE id=%s", (owner_id,), commit=True)
+
+def get_owner_by_phone(phone):
+    return execute_query("SELECT id, email, phone, name FROM owners WHERE phone=%s", (phone,), fetch='one')
+
+def update_password_by_email_for_owner(email, new_password_hash):
+    query = "UPDATE owners SET password_hash=%s WHERE email=%s"
+    return execute_query(query, (new_password_hash, email), commit=True)
 
 # ---- DRIVER ----
 def get_driver_by_id(driver_id):
-    """Retrieves a single driver by ID."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name, phone, car_id, status, last_latitude, last_longitude FROM drivers WHERE id=?", (driver_id,))
-    row = cur.fetchone()
-    conn.close()
-    if row:
-        return {
-            "id": row[0], "name": row[1], "phone": row[2],
-            "car_id": row[3], "status": row[4],
-            "last_latitude": row[5], "last_longitude": row[6]
-        }
-    return None
+    return execute_query("SELECT * FROM drivers WHERE id=%s", (driver_id,), fetch='one')
 
-def add_driver(name, phone, car_id=None, status='free', last_latitude=None, last_longitude=None):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO drivers (name, phone, car_id, status, last_latitude, last_longitude) VALUES (?, ?, ?, ?, ?, ?)", (name, phone, car_id, status, last_latitude, last_longitude))
-    conn.commit()
-    driver_id = cur.lastrowid
-    conn.close()
-    return driver_id
+def add_driver(name, phone, car_id=None, status='free'):
+    query = "INSERT INTO drivers (name, phone, car_id, status) VALUES (%s, %s, %s, %s)"
+    return execute_query(query, (name, phone, car_id, status), commit=True)
 
 def update_driver(driver_id, name, phone, car_id, status):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE drivers SET name=?, phone=?, car_id=?, status=? WHERE id=?", (name, phone, car_id, status, driver_id))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    query = "UPDATE drivers SET name=%s, phone=%s, car_id=%s, status=%s WHERE id=%s"
+    return execute_query(query, (name, phone, car_id, status, driver_id), commit=True)
 
 def update_driver_location(driver_id, latitude, longitude):
-    """Updates a driver's last known location."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE drivers SET last_latitude=?, last_longitude=? WHERE id=?", (latitude, longitude, driver_id))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    query = "UPDATE drivers SET last_latitude=%s, last_longitude=%s WHERE id=%s"
+    return execute_query(query, (latitude, longitude, driver_id), commit=True)
 
 def delete_driver(driver_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM drivers WHERE id=?", (driver_id,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    return execute_query("DELETE FROM drivers WHERE id=%s", (driver_id,), commit=True)
 
-def get_all_drivers():
-    """Retrieves all drivers from the database."""
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT d.id, d.name, d.phone, c.model, d.status, d.car_id, d.last_latitude, d.last_longitude
-        FROM drivers d
-        LEFT JOIN cars c ON d.car_id = c.id
-    ''')
-    drivers = cursor.fetchall()
-    conn.close()
-    return [{
-        "id": row[0], "name": row[1], "phone": row[2], "car_model": row[3],
-        "status": row[4], "car_id": row[5], "last_latitude": row[6], "last_longitude": row[7]
-    } for row in drivers]
+# db.py
 
-
+def get_all_drivers(status=None):
+    query = """
+        SELECT 
+            d.id, 
+            d.name, 
+            d.phone, 
+            c.car_number as car_number,  -- CHANGE THIS LINE
+            d.status, 
+            d.car_id, 
+            d.last_latitude, 
+            d.last_longitude
+        FROM drivers d LEFT JOIN cars c ON d.car_id = c.id
+    """
+    params = []
+    if status:
+        query += " WHERE d.status = %s"
+        params.append(status)
+    return execute_query(query, params, fetch='all')
 # ---- CAR ----
+def get_car_by_id(car_id):
+    return execute_query("SELECT * FROM cars WHERE id=%s", (car_id,), fetch='one')
+
 def add_car(car_number, model, car_type, rate, status='free'):
-    conn = connect()
-    cur = conn.cursor()
-    try:
-        cur.execute("INSERT INTO cars (car_number, model, type, rate, status) VALUES (?, ?, ?, ?, ?)", (car_number, model, car_type, rate, status))
-        conn.commit()
-        car_id = cur.lastrowid
-        conn.close()
-        return car_id
-    except sqlite3.IntegrityError:
-        conn.close()
-        return None
+    query = "INSERT INTO cars (car_number, model, type, rate, status) VALUES (%s, %s, %s, %s, %s)"
+    return execute_query(query, (car_number, model, car_type, rate, status), commit=True)
 
 def update_car(car_id, car_number, model, car_type, rate, status):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE cars SET car_number=?, model=?, type=?, rate=?, status=? WHERE id=?", (car_number, model, car_type, rate, status, car_id))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    query = "UPDATE cars SET car_number=%s, model=%s, type=%s, rate=%s, status=%s WHERE id=%s"
+    return execute_query(query, (car_number, model, car_type, rate, status, car_id), commit=True)
 
 def delete_car(car_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM cars WHERE id=?", (car_id,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    return execute_query("DELETE FROM cars WHERE id=%s", (car_id,), commit=True)
 
 def list_available_car_types():
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT DISTINCT type FROM cars WHERE status='free'")
-    types = [row[0] for row in cur.fetchall()]
-    conn.close()
-    return types
+    rows = execute_query("SELECT DISTINCT type FROM cars WHERE status='free'", fetch='all')
+    return [row['type'] for row in rows] if rows else []
 
-def get_all_cars():
-    """Retrieves all cars from the database."""
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, car_number, model, type, rate, status FROM cars")
-    cars = cursor.fetchall()
-    conn.close()
-    return [{"id": row[0], "car_number": row[1], "model": row[2], "type": row[3], "rate": row[4], "status": row[5]} for row in cars]
+def get_all_cars(status=None):
+    query = "SELECT * FROM cars"
+    params = []
+    if status:
+        query += " WHERE status = %s"
+        params.append(status)
+    return execute_query(query, params, fetch='all')
 
+# db.py
+
+# db.py
+
+def get_rate_for_car_type(car_type):
+    """
+    Fetches the LOWEST price per km for a given vehicle type
+    from all cars that are currently marked as 'free'.
+    """
+    # This query finds the minimum rate for a car type that is available.
+    query = "SELECT MIN(rate) as rate FROM cars WHERE type = %s AND status = 'free'"
+    result = execute_query(query, (car_type,), fetch='one')
+    
+    # The result will contain the best rate, or None if no free cars of that type exist.
+    return result['rate'] if result and result['rate'] is not None else None
+    
 # ---- RIDE ----
-def add_ride(user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status='ongoing', payment_status='pending', start_time=None, end_time=None):
-    conn = connect()
-    cur = conn.cursor()
+def add_ride(user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time, car_type):
     if start_time is None:
         start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cur.execute('''
-        INSERT INTO rides (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time))
-    conn.commit()
-    ride_id = cur.lastrowid
+    
+    query = """
+        INSERT INTO rides (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time, car_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    params = (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time, car_type)
+    ride_id = execute_query(query, params, commit=True)
 
-    if status == 'ongoing' and driver_id and car_id:
-        cur.execute("UPDATE drivers SET status='busy' WHERE id=?", (driver_id,))
-        cur.execute("UPDATE cars SET status='busy' WHERE id=?", (car_id,))
-        conn.commit()
-    conn.close()
+    if ride_id and status == 'ongoing' and driver_id and car_id:
+        execute_query("UPDATE drivers SET status='busy' WHERE id=%s", (driver_id,), commit=True)
+        execute_query("UPDATE cars SET status='busy' WHERE id=%s", (car_id,), commit=True)
     return ride_id
 
 def update_ride(ride_id, user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute('''
-        UPDATE rides SET user_phone=?, pickup=?, destination=?, distance=?, duration=?, fare=?, car_id=?, driver_id=?, status=?, payment_status=?, start_time=?, end_time=?
-        WHERE id=?
-    ''', (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time, ride_id))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    query = """
+        UPDATE rides SET user_phone=%s, pickup=%s, destination=%s, distance=%s, duration=%s, 
+        fare=%s, car_id=%s, driver_id=%s, status=%s, payment_status=%s, start_time=%s, end_time=%s
+        WHERE id=%s
+    """
+    params = (user_phone, pickup, destination, distance, duration, fare, car_id, driver_id, status, payment_status, start_time, end_time, ride_id)
+    return execute_query(query, params, commit=True)
 
 def delete_ride(ride_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM rides WHERE id=?", (ride_id,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    return execute_query("DELETE FROM rides WHERE id=%s", (ride_id,), commit=True)
 
 def get_ride_by_id(ride_id):
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute('''
+    query = """
         SELECT
-            r.id, r.user_phone, u.name AS customer_name, d.name AS driver_name, r.pickup, r.destination,
-            r.distance, r.duration, r.fare, r.status, r.payment_status, r.start_time, r.end_time,
-            c.model AS car_model, c.car_number, r.driver_id, r.car_id, c.type AS car_type
+            r.*, u.name AS customer_name, d.name AS driver_name,
+            c.model AS car_model, c.car_number
         FROM rides r
         LEFT JOIN users u ON r.user_phone = u.phone
         LEFT JOIN drivers d ON r.driver_id = d.id
         LEFT JOIN cars c ON r.car_id = c.id
-        WHERE r.id = ?
-    ''', (ride_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return {
-            "id": row[0], "user_phone": row[1], "customer_name": row[2], "driver_name": row[3],
-            "pickup": row[4], "destination": row[5], "distance": row[6], "duration": row[7],
-            "fare": row[8], "status": row[9], "payment_status": row[10],
-            "start_time": row[11], "end_time": row[12], "car_model": row[13],
-            "car_number": row[14], "driver_id": row[15], "car_id": row[16], "car_type": row[17]
-        }
-    return None
+        WHERE r.id = %s
+    """
+    return execute_query(query, (ride_id,), fetch='one')
 
-
-def complete_ride(ride_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE rides SET status='completed', end_time=? WHERE id=?", (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ride_id))
-
-    cur.execute("SELECT car_id, driver_id FROM rides WHERE id=?", (ride_id,))
-    car_id, driver_id = cur.fetchone()
-    if driver_id:
-        cur.execute("UPDATE drivers SET status='free' WHERE id=?", (driver_id,))
-    if car_id:
-        cur.execute("UPDATE cars SET status='free' WHERE id=?", (car_id,))
-    conn.commit()
-    conn.close()
-
-def get_available_driver_and_car(car_type, proposed_start_time_str, proposed_end_time_str):
-    conn = connect()
-    cur = conn.cursor()
-    # This is complex logic and remains the same. For brevity, it's assumed to be correct.
-    # A full implementation would go here. A simplified version for now:
-    cur.execute("SELECT id, name, phone FROM drivers WHERE status='free' LIMIT 1")
-    driver_row = cur.fetchone()
-    cur.execute("SELECT id, car_number, model, rate FROM cars WHERE type=? AND status='free' LIMIT 1", (car_type,))
-    car_row = cur.fetchone()
-    conn.close()
+def get_available_driver_and_car(car_type, start_time, end_time):
+    driver_query = "SELECT * FROM drivers WHERE status = 'free' AND is_fixed = 0 LIMIT 1"
+    car_query = "SELECT * FROM cars WHERE status = 'free' AND type = %s LIMIT 1"
     
-    driver_data = {"id": driver_row[0], "name": driver_row[1], "phone": driver_row[2]} if driver_row else None
-    car_data = {"id": car_row[0], "car_number": car_row[1], "model": car_row[2], "rate": car_row[3]} if car_row else None
-    return driver_data, car_data
+    driver = execute_query(driver_query, fetch='one')
+    car = execute_query(car_query, (car_type,), fetch='one')
+    
+    return driver, car
 
 def assign_driver_to_ride(ride_id, driver_id, car_id):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE rides SET driver_id=?, car_id=?, status='ongoing' WHERE id=?", (driver_id, car_id, ride_id))
-    cur.execute("UPDATE drivers SET status='busy' WHERE id=?", (driver_id,))
-    cur.execute("UPDATE cars SET status='busy' WHERE id=?", (car_id,))
-    conn.commit()
-    conn.close()
+    execute_query("UPDATE rides SET driver_id=%s, car_id=%s, status='ongoing' WHERE id=%s", (driver_id, car_id, ride_id), commit=True)
+    execute_query("UPDATE drivers SET status='busy' WHERE id=%s", (driver_id,), commit=True)
+    execute_query("UPDATE cars SET status='busy' WHERE id=%s", (car_id,), commit=True)
     return True
 
 def get_all_rides(status=None):
-    conn = connect()
-    cursor = conn.cursor()
-    query = '''
+    query = """
         SELECT
             r.id, u.name AS customer_name, d.name AS driver_name, r.pickup, r.destination,
             r.distance, r.duration, r.fare, r.status, r.payment_status, r.start_time, r.end_time,
@@ -321,303 +254,292 @@ def get_all_rides(status=None):
         LEFT JOIN users u ON r.user_phone = u.phone
         LEFT JOIN drivers d ON r.driver_id = d.id
         LEFT JOIN cars c ON r.car_id = c.id
-    '''
+    """
     params = []
     if status:
-        query += " WHERE r.status = ?"
+        query += " WHERE r.status = %s"
         params.append(status)
-    
-    cursor.execute(query, params)
-    rides = cursor.fetchall()
-    conn.close()
-    return [{
-        "id": row[0], "customer_name": row[1], "driver_name": row[2], "pickup": row[3],
-        "destination": row[4], "distance": row[5], "duration": row[6], "fare": row[7],
-        "status": row[8], "payment_status": row[9], "start_time": row[10], "end_time": row[11],
-        "car_model": row[12], "car_number": row[13], "user_phone": row[14],
-        "driver_id": row[15], "car_id": row[16]
-    } for row in rides]
+    return execute_query(query, params, fetch='all')
 
-def get_prebooked_rides_for_assignment(current_time, assignment_window_end):
-    conn = connect()
-    cursor = conn.cursor()
-    query = '''
+
+
+def get_prebooked_rides_for_assignment():
+    """Fetches all prebooked rides, regardless of time."""
+    return execute_query("SELECT * FROM rides WHERE status='prebooked'", fetch='all')
+
+def get_rides_by_user_phone(user_phone=None, status=None, unassigned_only=False):
+    query = """
         SELECT
-            r.id, r.user_phone, r.pickup, r.destination, r.distance, r.duration, r.fare,
-            r.payment_status, r.start_time, r.end_time, c.type AS car_type
+            r.*, d.name as driver_name, c.model as car_model, u.name as customer_name
         FROM rides r
-        LEFT JOIN cars c ON r.car_id = c.id
-        WHERE r.status = 'prebooked'
-          AND r.start_time BETWEEN ? AND ?
-          AND r.driver_id IS NULL
-    '''
-    cursor.execute(query, (current_time.strftime('%Y-%m-%d %H:%M:%S'), assignment_window_end.strftime('%Y-%m-%d %H:%M:%S')))
-    rides = cursor.fetchall()
-    conn.close()
-    return [{
-        "id": row[0], "user_phone": row[1], "pickup": row[2], "destination": row[3],
-        "distance": row[4], "duration": row[5], "fare": row[6], "payment_status": row[7],
-        "start_time": row[8], "end_time": row[9], "car_type": row[10] if row[10] else 'sedan'
-    } for row in rides]
-    
-def get_rides_by_user_phone(user_phone):
-    """Retrieves all rides for a specific user, ordered by most recent."""
-    conn = connect()
-    cursor = conn.cursor()
-    query = '''
-        SELECT
-            r.id, r.pickup, r.destination, r.fare, r.status, r.payment_status,
-            r.start_time, r.end_time, d.name as driver_name, c.model as car_model
-        FROM rides r
+        LEFT JOIN users u ON r.user_phone = u.phone
         LEFT JOIN drivers d ON r.driver_id = d.id
         LEFT JOIN cars c ON r.car_id = c.id
-        WHERE r.user_phone = ?
-        ORDER BY r.start_time DESC
-    '''
-    cursor.execute(query, (user_phone,))
-    rides = cursor.fetchall()
-    conn.close()
-    return [{
-        "id": row[0], "pickup": row[1], "destination": row[2], "fare": row[3],
-        "status": row[4], "payment_status": row[5], "start_time": row[6],
-        "end_time": row[7], "driver_name": row[8], "car_model": row[9]
-    } for row in rides]
+    """
+    conditions = []
+    params = []
 
-# ---- COUPON ----
-def get_coupon(code):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT code, discount, used FROM coupons WHERE code = ? AND used = 0", (code,))
-    row = cur.fetchone()
-    conn.close()
-    if row:
-        return {"code": row[0], "discount": row[1], "used": row[2]}
-    return None
+    if user_phone:
+        conditions.append("r.user_phone = %s")
+        params.append(user_phone)
+    if status:
+        conditions.append("r.status = %s")
+        params.append(status)
+    if unassigned_only:
+        conditions.append("r.driver_id IS NULL")
 
-def add_coupon(code, discount):
-    conn = connect()
-    cur = conn.cursor()
-    try:
-        cur.execute("INSERT INTO coupons (code, discount, used) VALUES (?, ?, 0)", (code, discount))
-        conn.commit()
-        coupon_id = cur.lastrowid
-        conn.close()
-        return coupon_id
-    except sqlite3.IntegrityError:
-        conn.close()
-        return None
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
 
-def update_coupon(code, discount, used):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE coupons SET discount=?, used=? WHERE code=?", (discount, used, code))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    query += " ORDER BY r.start_time DESC"
+    if user_phone:
+        query += " LIMIT 2"
+    
+    return execute_query(query, tuple(params), fetch='all')
 
-def delete_coupon(code):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM coupons WHERE code=?", (code,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+def update_ride_status_and_time(ride_id, new_status, timestamp_column, timestamp_value):
+    valid_columns = ['enroute_to_pickup_time', 'at_pickup_time', 'trip_start_time', 'end_time']
+    if timestamp_column not in valid_columns:
+        raise ValueError("Invalid timestamp column name")
+    
+    query = f"UPDATE rides SET status=%s, {timestamp_column}=%s WHERE id=%s"
+    return execute_query(query, (new_status, timestamp_value, ride_id), commit=True)
 
-def mark_coupon_used(code):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("UPDATE coupons SET used = 1 WHERE code = ?", (code,))
-    conn.commit()
-    conn.close()
+def complete_ride_and_free_resources(ride_id, end_time):
+    ride = get_ride_by_id(ride_id)
+    if ride:
+        execute_query("UPDATE rides SET status='completed', end_time=%s WHERE id=%s", (end_time, ride_id), commit=True)
+        if ride.get('driver_id'):
+            execute_query("UPDATE drivers SET status='free' WHERE id=%s", (ride['driver_id'],), commit=True)
+        if ride.get('car_id'):
+            execute_query("UPDATE cars SET status='free' WHERE id=%s", (ride['car_id'],), commit=True)
+    return True
 
-def get_all_coupons():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT code, discount, used FROM coupons")
-    coupons = cursor.fetchall()
-    conn.close()
-    return [{"code": row[0], "discount": row[1], "used": row[2]} for row in coupons]
+def complete_ride(ride_id):
+    """Original function name restored for compatibility. Marks ride as complete and frees resources."""
+    end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return complete_ride_and_free_resources(ride_id, end_time)
 
-# ---- PAYMENT ----
+# ---- PAYMENT & COUPON ----
 def update_payment_status(ride_id, status):
-    conn = connect()
-    c = conn.cursor()
-    c.execute("UPDATE rides SET payment_status = ? WHERE id = ?", (status, ride_id))
-    conn.commit()
-    conn.close()
+    return execute_query("UPDATE rides SET payment_status = %s WHERE id = %s", (status, ride_id), commit=True)
 
 def get_latest_ride_id_by_phone(phone):
-    conn = connect()
-    c = conn.cursor()
-    c.execute("SELECT id FROM rides WHERE user_phone = ? ORDER BY id DESC LIMIT 1", (phone,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else None
+    result = execute_query("SELECT id FROM rides WHERE user_phone = %s ORDER BY id DESC LIMIT 1", (phone,), fetch='one')
+    return result['id'] if result else None
 
-# ---- DASHBOARD STATS ----
+def get_all_coupons():
+    return execute_query("SELECT * FROM coupons", fetch='all')
+
+def get_coupon(code):
+    return execute_query("SELECT * FROM coupons WHERE code = %s AND used = 0", (code,), fetch='one')
+
+def add_coupon(code, discount):
+    return execute_query("INSERT INTO coupons (code, discount) VALUES (%s, %s)", (code, discount), commit=True)
+
+def update_coupon(code, discount, used):
+    return execute_query("UPDATE coupons SET discount=%s, used=%s WHERE code=%s", (discount, used, code), commit=True)
+
+def delete_coupon(code):
+    return execute_query("DELETE FROM coupons WHERE code=%s", (code,), commit=True)
+
+def mark_coupon_used(code):
+    return execute_query("UPDATE coupons SET used = 1 WHERE code = %s", (code,), commit=True)
+
+# ---- DASHBOARD & STATS ----
 def count_users():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
+    result = execute_query("SELECT COUNT(*) as count FROM users", fetch='one')
+    return result['count'] if result else 0
 
 def count_rides(status=None):
-    conn = connect()
-    cursor = conn.cursor()
+    query = "SELECT COUNT(*) as count FROM rides"
+    params = []
     if status:
-        cursor.execute("SELECT COUNT(*) FROM rides WHERE status=?", (status,))
-    else:
-        cursor.execute("SELECT COUNT(*) FROM rides")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
+        query += " WHERE status = %s"
+        params.append(status)
+    result = execute_query(query, params, fetch='one')
+    return result['count'] if result else 0
 
 def count_drivers():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM drivers")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
-
+    result = execute_query("SELECT COUNT(*) as count FROM drivers", fetch='one')
+    return result['count'] if result else 0
+    
 def count_vehicles():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM cars")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
+    result = execute_query("SELECT COUNT(*) as count FROM cars", fetch='one')
+    return result['count'] if result else 0
 
 def count_vehicles_on_ride():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM cars WHERE status='busy'")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
+    result = execute_query("SELECT COUNT(*) as count FROM cars WHERE status='busy'", fetch='one')
+    return result['count'] if result else 0
 
 def count_drivers_on_ride():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM drivers WHERE status='busy'")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
-
+    result = execute_query("SELECT COUNT(*) as count FROM drivers WHERE status='busy'", fetch='one')
+    return result['count'] if result else 0
+    
 def calculate_revenue():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT SUM(fare) FROM rides WHERE payment_status='paid'")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result or 0
+    result = execute_query("SELECT SUM(fare) as total FROM rides WHERE payment_status='paid'", fetch='one')
+    return result['total'] if result and result['total'] else 0
 
 def count_pending_payments():
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM rides WHERE payment_status='pending'")
-    result = cursor.fetchone()[0]
-    conn.close()
-    return result
+    result = execute_query("SELECT COUNT(*) as count FROM rides WHERE payment_status='pending'", fetch='one')
+    return result['count'] if result else 0
 
 def get_revenue_by_period(period='monthly'):
-    conn = connect()
-    cursor = conn.cursor()
-    query = ""
     if period == 'weekly':
-        query = '''
-            SELECT strftime('%Y-%W', start_time) AS period_label, SUM(fare) AS total_revenue
-            FROM rides WHERE payment_status='paid' AND start_time IS NOT NULL
-            GROUP BY period_label ORDER BY period_label
-        '''
+        label_format = "DATE_FORMAT(start_time, '%Y-%u')"
     elif period == 'yearly':
-        query = '''
-            SELECT strftime('%Y', start_time) AS period_label, SUM(fare) AS total_revenue
-            FROM rides WHERE payment_status='paid' AND start_time IS NOT NULL
-            GROUP BY period_label ORDER BY period_label
-        '''
-    else: # Default to 'monthly'
-        query = '''
-            SELECT strftime('%Y-%m', start_time) AS period_label, SUM(fare) AS total_revenue
-            FROM rides WHERE payment_status='paid' AND start_time IS NOT NULL
-            GROUP BY period_label ORDER BY period_label
-        '''
-    cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
-    return [{"period_label": row[0], "revenue": row[1]} for row in results]
+        label_format = "DATE_FORMAT(start_time, '%Y')"
+    else: # Default 'monthly'
+        label_format = "DATE_FORMAT(start_time, '%Y-%m')"
 
-# In db.py, add these new functions for owner management
-
-def add_owner(email, phone, name, password_hash):
-    """Adds a new owner to the database."""
-    conn = connect()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "INSERT INTO owners (email, phone, name, password_hash) VALUES (?, ?, ?, ?)",
-            (email, phone, name, password_hash)
-        )
-        conn.commit()
-        return cur.lastrowid
-    except sqlite3.IntegrityError:
-        return None # Email or phone might already exist
-    finally:
-        conn.close()
-
-def get_all_owners():
-    """Retrieves all owners (without their passwords)."""
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, email, phone, name FROM owners")
-    owners = cursor.fetchall()
-    conn.close()
-    return [{"id": row[0], "email": row[1], "phone": row[2], "name": row[3]} for row in owners]
-
-def update_owner(owner_id, email, phone, name):
-    """Updates an owner's details."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE owners SET email=?, phone=?, name=? WHERE id=?",
-        (email, phone, name, owner_id)
-    )
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
-
-def delete_owner(owner_id):
-    """Deletes an owner from the database."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM owners WHERE id=?", (owner_id,))
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
-
-# In db.py, add this new function
-
-def get_owner_by_phone(phone):
-    """Retrieves an owner by phone number."""
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT id, email, phone, name FROM owners WHERE phone=?", (phone,))
-    owner = cur.fetchone()
-    conn.close()
-    if owner:
-        return {"id": owner[0], "email": owner[1], "phone": owner[2], "name": owner[3]}
+    query = f"""
+        SELECT {label_format} AS period_label, SUM(fare) AS revenue
+        FROM rides WHERE payment_status='paid' AND start_time IS NOT NULL
+        GROUP BY period_label ORDER BY period_label
+    """
+    return execute_query(query, fetch='all')
+    
+# ---- SETTINGS & CONTENT ----
+def get_setting(key):
+    result = execute_query("SELECT value FROM settings WHERE `key_name`=%s", (key,), fetch='one')
+    if result:
+        val = result['value']
+        if val.lower() in ['true', 'false']:
+            return val.lower() == 'true'
+        return val
     return None
 
-# ---- Placeholders for Locations and Pricing ----
+def set_setting(key, value):
+    if isinstance(value, bool):
+        value = 'true' if value else 'false'
+    query = """
+        INSERT INTO settings (key_name, value)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE value = VALUES(value)
+    """
+    return execute_query(query, (key, value), commit=True)
+
+def get_site_content(key):
+    result = execute_query("SELECT value FROM site_content WHERE key_name=%s", (key,), fetch='one')
+    return result['value'] if result else ""
+
+def set_site_content(key, value):
+    query = """
+        INSERT INTO site_content (key_name, value)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE value = VALUES(value)
+    """
+    return execute_query(query, (key, value), commit=True)
+
+# ---- CHAT SESSION ----
+def get_chat_session(phone):
+    return execute_query("SELECT * FROM chat_sessions WHERE phone=%s", (phone,), fetch='one')
+
+# db.py
+
+def save_chat_session(phone, data):
+    query = """
+        INSERT INTO chat_sessions (
+            phone, state, new_user_name, new_user_email, booking_date, pickup, destination, 
+            car_type, route_distance, route_duration, fare, ride_status, start_time, 
+            end_time, ride_id, upi_string, invoice_total, otp, otp_timestamp
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            state=VALUES(state),
+            new_user_name=VALUES(new_user_name),
+            new_user_email=VALUES(new_user_email),
+            booking_date=VALUES(booking_date),
+            pickup=VALUES(pickup),
+            destination=VALUES(destination),
+            car_type=VALUES(car_type),
+            route_distance=VALUES(route_distance),
+            route_duration=VALUES(route_duration),
+            fare=VALUES(fare),
+            ride_status=VALUES(ride_status),
+            start_time=VALUES(start_time),
+            end_time=VALUES(end_time),
+            ride_id=VALUES(ride_id),
+            upi_string=VALUES(upi_string),
+            invoice_total=VALUES(invoice_total),
+            otp=VALUES(otp),
+            otp_timestamp=VALUES(otp_timestamp);
+    """
+    params = (
+        phone, data.get("state"), data.get("new_user_name"), data.get("new_user_email"),
+        data.get("booking_date"), data.get("pickup"), data.get("destination"), 
+        data.get("car_type"), data.get("route_distance"), data.get("route_duration"), 
+        data.get("fare"), data.get("ride_status"), data.get("start_time"), 
+        data.get("end_time"), data.get("ride_id"), data.get("upi_string"), 
+        data.get("invoice_total"), data.get("otp"), data.get("otp_timestamp")
+    )
+    return execute_query(query, params, commit=True)
+
+# ---- PLACEHOLDERS ----
 def get_all_locations():
-    return [{"id": 1, "name": "Koramangala"}, {"id": 2, "name": "Indiranagar"}]
-def add_location(name): return {"id": 99, "name": name}
-def update_location(location_id, name): return True
-def delete_location(location_id): return True
+    """Fetches all locations from the database."""
+    return execute_query("SELECT * FROM locations ORDER BY name", fetch='all')
+
+def add_location(name):
+    """Adds a new location to the database."""
+    query = "INSERT INTO locations (name) VALUES (%s)"
+    return execute_query(query, (name,), commit=True)
+
+def update_location(location_id, name):
+    """Updates an existing location's name."""
+    query = "UPDATE locations SET name=%s WHERE id=%s"
+    return execute_query(query, (name, location_id), commit=True)
+
+def delete_location(location_id):
+    """Deletes a location from the database."""
+    query = "DELETE FROM locations WHERE id=%s"
+    return execute_query(query, (location_id,), commit=True)
+
 def get_all_pricing():
-    return [{"id": 1, "vehicle_type": "sedan", "price_per_km": 12.0}, {"id": 2, "vehicle_type": "suv", "price_per_km": 15.0}]
-def add_pricing(vehicle_type, model, price_per_km): return {"id": 99, "vehicle_type": vehicle_type, "model": model, "price_per_km": price_per_km}
-def update_pricing(pricing_id, vehicle_type, model, price_per_km): return True
-def delete_pricing(pricing_id): return True
+    """Fetches all pricing rules from the database."""
+    return execute_query("SELECT * FROM pricing ORDER BY vehicle_type", fetch='all')
+
+def add_pricing(vehicle_type, price_per_km):
+    """Adds a new pricing rule to the database."""
+    query = "INSERT INTO pricing (vehicle_type, price_per_km) VALUES (%s, %s)"
+    return execute_query(query, (vehicle_type, price_per_km), commit=True)
+
+def update_pricing(pricing_id, vehicle_type, price_per_km):
+    """Updates an existing pricing rule."""
+    query = "UPDATE pricing SET vehicle_type=%s, price_per_km=%s WHERE id=%s"
+    return execute_query(query, (vehicle_type, price_per_km, pricing_id), commit=True)
+
+def delete_pricing(pricing_id):
+    """Deletes a pricing rule from the database."""
+    return execute_query("DELETE FROM pricing WHERE id=%s", (pricing_id,), commit=True)
+
+def manually_assign_driver(driver_id, car_id, ride_id):
+    """Assigns a driver and car to a ride, checking for fixed-driver constraints."""
+    driver = execute_query("SELECT is_fixed, car_id FROM drivers WHERE id = %s", (driver_id,), fetch='one')
+
+    # Note: car_id from the database can be None, so handle types carefully.
+    # The car_id from the web request will be a string.
+    if driver and driver.get("is_fixed") and driver.get("car_id") is not None and driver.get("car_id") != int(car_id):
+        return {"error": "This driver is permanently assigned to another car."}
+
+    # Proceed with assignment
+    execute_query("UPDATE rides SET driver_id = %s, car_id = %s, status = 'assigned' WHERE id = %s", (driver_id, car_id, ride_id), commit=True)
+    execute_query("UPDATE drivers SET status = 'busy', car_id = %s WHERE id = %s", (car_id, driver_id), commit=True)
+    execute_query("UPDATE cars SET status = 'busy' WHERE id = %s", (car_id,), commit=True)
+    
+    return {"success": True}
+
+def get_available_cars_by_type(car_type):
+    """Fetches all cars of a specific type that are currently marked as 'free'."""
+    query = "SELECT id, model, car_number, rate FROM cars WHERE type = %s AND status = 'free'"
+    return execute_query(query, (car_type,), fetch='all')
+
+def get_driver_by_phone(phone):
+    """Fetches a driver's details by their phone number."""
+    return execute_query("SELECT * FROM drivers WHERE phone=%s", (phone,), fetch='one')
+
+# db.py
+
+def get_pricing_for_vehicle_type(vehicle_type):
+    """Fetches the pricing rule for a specific vehicle type."""
+    return execute_query("SELECT * FROM pricing WHERE vehicle_type = %s", (vehicle_type,), fetch='one')
