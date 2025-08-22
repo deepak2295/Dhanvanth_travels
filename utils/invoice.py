@@ -1,4 +1,4 @@
-# ✅ Updated invoice.py to include logo in invoice
+
 from fpdf import FPDF
 import os
 import requests
@@ -10,9 +10,7 @@ def generate_invoice(data, filename="invoice.pdf"):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Logo (top-left corner)
-    logo_path = "logo.png"  # Ensure this file exists in your project root
+    logo_path = "logo.png" 
     if os.path.exists(logo_path):
         pdf.image(logo_path, x=10, y=8, w=30)
 
@@ -29,7 +27,6 @@ def generate_invoice(data, filename="invoice.pdf"):
     pdf.ln(5)
     pdf.set_font("Arial", '', 10)
     pdf.cell(100, 10, f"Bill To: {data['customer_name']}", ln=True)
-    # FIX: Removed ln=True from multi_cell and replaced '→' with '->'
     pdf.multi_cell(100, 5, f"Address: {data.get('customer_address', 'N/A')}")
     pdf.ln(10)
 
@@ -41,7 +38,6 @@ def generate_invoice(data, filename="invoice.pdf"):
     # Table Rows
     pdf.set_font("Arial", '', 10)
     for item in data['trips']:
-        # FIX: Replaced '→' with '->' for Unicode compatibility
         description = item['description'].replace('→', '->')
         pdf.cell(120, 10, description, 1, 0)
         pdf.cell(40, 10, f"INR {item['amount']:.2f}", 1, 1, 'R')

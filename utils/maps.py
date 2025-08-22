@@ -29,7 +29,7 @@ def get_location_suggestions(query):
 
     if response.get('status') == 'OK' and response.get('results'):
         suggestions = []
-        for result in response['results'][:4]: # Limit to the top 4 results
+        for result in response['results'][:4]:
             suggestions.append({
                 "address": result['formatted_address'],
                 "place_id": result['place_id']
@@ -64,7 +64,7 @@ def get_route_details(origin_place_id, destination_place_id):
     
     if response.get("status") != "OK":
         print(f"❌ Google Maps API error: {response.get('status')} - {response.get('error_message')}")
-        return None  # Don't return empty dict
+        return None  
 
     route = response["routes"][0]["legs"][0]
     return {

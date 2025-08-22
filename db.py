@@ -1,14 +1,11 @@
-# db.py (Updated for MySQL - All functions included)
-
 import mysql.connector
 from mysql.connector import errorcode
 from datetime import datetime
 
-# --- IMPORTANT: Configure your MySQL connection details here ---
 db_config = {
-    'host': 'localhost',
-    'user': 'cab_app_user',
-    'password': 'Deep@k80', # Make sure to use your actual password
+    'host': '34.72.197.29',
+    'user': 'Deepak',
+    'password': 'Deep@k80',
     'database': 'cab_booking_db'
 }
 
@@ -124,7 +121,6 @@ def update_driver_location(driver_id, latitude, longitude):
 def delete_driver(driver_id):
     return execute_query("DELETE FROM drivers WHERE id=%s", (driver_id,), commit=True)
 
-# db.py
 
 def get_all_drivers(status=None):
     query = """
@@ -171,20 +167,15 @@ def get_all_cars(status=None):
         params.append(status)
     return execute_query(query, params, fetch='all')
 
-# db.py
-
-# db.py
 
 def get_rate_for_car_type(car_type):
     """
     Fetches the LOWEST price per km for a given vehicle type
     from all cars that are currently marked as 'free'.
     """
-    # This query finds the minimum rate for a car type that is available.
     query = "SELECT MIN(rate) as rate FROM cars WHERE type = %s AND status = 'free'"
     result = execute_query(query, (car_type,), fetch='one')
     
-    # The result will contain the best rate, or None if no free cars of that type exist.
     return result['rate'] if result and result['rate'] is not None else None
     
 # ---- RIDE ----
@@ -389,7 +380,7 @@ def get_revenue_by_period(period='monthly'):
         label_format = "DATE_FORMAT(start_time, '%Y-%u')"
     elif period == 'yearly':
         label_format = "DATE_FORMAT(start_time, '%Y')"
-    else: # Default 'monthly'
+    else:
         label_format = "DATE_FORMAT(start_time, '%Y-%m')"
 
     query = f"""
@@ -435,7 +426,6 @@ def set_site_content(key, value):
 def get_chat_session(phone):
     return execute_query("SELECT * FROM chat_sessions WHERE phone=%s", (phone,), fetch='one')
 
-# db.py
 
 def save_chat_session(phone, data):
     query = """
@@ -517,12 +507,9 @@ def manually_assign_driver(driver_id, car_id, ride_id):
     """Assigns a driver and car to a ride, checking for fixed-driver constraints."""
     driver = execute_query("SELECT is_fixed, car_id FROM drivers WHERE id = %s", (driver_id,), fetch='one')
 
-    # Note: car_id from the database can be None, so handle types carefully.
-    # The car_id from the web request will be a string.
     if driver and driver.get("is_fixed") and driver.get("car_id") is not None and driver.get("car_id") != int(car_id):
         return {"error": "This driver is permanently assigned to another car."}
 
-    # Proceed with assignment
     execute_query("UPDATE rides SET driver_id = %s, car_id = %s, status = 'assigned' WHERE id = %s", (driver_id, car_id, ride_id), commit=True)
     execute_query("UPDATE drivers SET status = 'busy', car_id = %s WHERE id = %s", (car_id, driver_id), commit=True)
     execute_query("UPDATE cars SET status = 'busy' WHERE id = %s", (car_id,), commit=True)
@@ -537,8 +524,6 @@ def get_available_cars_by_type(car_type):
 def get_driver_by_phone(phone):
     """Fetches a driver's details by their phone number."""
     return execute_query("SELECT * FROM drivers WHERE phone=%s", (phone,), fetch='one')
-
-# db.py
 
 def get_pricing_for_vehicle_type(vehicle_type):
     """Fetches the pricing rule for a specific vehicle type."""

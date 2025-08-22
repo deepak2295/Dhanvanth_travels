@@ -1,23 +1,17 @@
-# init_db.py (Updated for MySQL)
-
 import mysql.connector
 from werkzeug.security import generate_password_hash
 
-# --- IMPORTANT: Configure your MySQL connection here ---
 db_config = {
-    'host': 'localhost',
-    'user': 'cab_app_user',
+    'host': '34.72.197.29',
+    'user': 'Deepak',
     'password': 'Deep@k80',
     'database': 'cab_booking_db'
 }
 
 try:
-    # Connect to DB
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
     print("✅ Successfully connected to MySQL database.")
-
-    # Drop old tables in the correct order (due to foreign keys)
     tables_to_drop = [
         'rides', 'chat_sessions', 'drivers', 'users', 'owners',
         'cars', 'coupons', 'settings', 'site_content','locations','pricing'
@@ -25,8 +19,6 @@ try:
     for table in tables_to_drop:
         cursor.execute(f"DROP TABLE IF EXISTS {table}")
         print(f"Dropped table {table} if it existed.")
-
-    # --- Recreate tables with MySQL syntax ---
 
     # Users table
     cursor.execute("""
@@ -120,8 +112,6 @@ try:
         value TEXT NOT NULL
     )
     """)
-    # Renamed 'key' to 'key_name' to avoid SQL reserved keyword conflict
-
     # Chat sessions table
     cursor.execute("""
     CREATE TABLE chat_sessions (
@@ -154,7 +144,6 @@ try:
         value TEXT NOT NULL
     )
     """)
-    # Renamed 'key' to 'key_name'
 
     cursor.execute("""
     CREATE TABLE locations (
@@ -163,9 +152,7 @@ try:
     )
     """)
 
-    # init_db.py
 
-    # --- REPLACE your pricing table definition with this ---
     cursor.execute("""
     CREATE TABLE pricing (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -174,9 +161,6 @@ try:
     )
     """)
 
-    # ... (rest of your table creation) ...
-
-    # --- REPLACE your dummy pricing data with this ---
     cursor.executemany(
         "INSERT INTO pricing (vehicle_type, price_per_km) VALUES (%s, %s)",
         [
@@ -188,9 +172,6 @@ try:
 
     print("✅ All tables created successfully.")
 
-    # --- Insert Dummy Data ---
-
-    # Insert settings (note the placeholder change from ? to %s)
     cursor.execute("INSERT INTO settings (key_name, value) VALUES (%s, %s)", ('assignment_mode', 'auto'))
 
     # Insert coupons

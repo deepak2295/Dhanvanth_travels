@@ -1,24 +1,16 @@
-// static/user_portal.js
 
-// --- Global Variables ---
-let siteContent = null; // Caches the 'About Us' and 'Contact Us' content.
-
-// --- Initialization ---
-// This single listener runs once the page is fully loaded and sets everything up.
+let siteContent = null;
 document.addEventListener('DOMContentLoaded', function() {
     setupTabListeners();
     setupFormListeners();
     addSuggestionButtons();
     fetchSiteContent();
-    fetchUserDetails(); // This now controls the initial view.
+    fetchUserDetails(); 
     populateCarTypes();
 });
 
-// --- Main Setup Functions ---
 
-/**
- * Sets up click listeners for the navigation tabs.
- */
+
 function setupTabListeners() {
     document.getElementById('booking-tab').addEventListener('click', () => switchTab('booking'));
     document.getElementById('history-tab').addEventListener('click', () => switchTab('history'));
@@ -26,18 +18,13 @@ function setupTabListeners() {
     document.getElementById('contact-tab').addEventListener('click', () => switchTab('contact'));
 }
 
-/**
- * Sets up the submit listeners for the page's forms.
- */
+
 function setupFormListeners() {
     document.getElementById('userBookingForm').addEventListener('submit', handleUserBooking);
     document.getElementById('name-form').addEventListener('submit', handleNameUpdate);
 }
 
-/**
- * Fetches details for the logged-in user.
- * It shows the name modal if required, otherwise, it shows the default booking tab.
- */
+
 async function fetchUserDetails() {
     try {
         const response = await fetch('/api/user/details');
@@ -56,11 +43,6 @@ async function fetchUserDetails() {
     }
 }
 
-// --- Event Handlers ---
-
-/**
- * Handles the submission of the new user name form.
- */
 async function handleNameUpdate(event) {
     event.preventDefault();
     const name = document.getElementById('new-name').value;
@@ -74,17 +56,13 @@ async function handleNameUpdate(event) {
 
         document.getElementById('name-modal').style.display = 'none';
         document.getElementById('user-welcome').textContent = `Welcome, ${name}!`;
-        switchTab('booking'); // Directly show booking tab without re-fetch
+        switchTab('booking'); 
     } catch (error) {
         console.error('Error updating name:', error);
         alert('Failed to update name. Please try again.');
     }
 }
 
-/**
- * Handles the main ride booking form submission.
- */
-// In user_portal.js, REPLACE the existing handleUserBooking function with this one
 
 async function handleUserBooking(event) {
     event.preventDefault();
@@ -104,7 +82,6 @@ async function handleUserBooking(event) {
     paymentOptions.style.display = 'none';
 
     try {
-        // Use the new, robust API call function instead of a direct fetch
         const result = await makeUserPortalApiCall('POST', '/api/user/book_ride', bookingData);
 
         messageArea.textContent = result.message;
@@ -127,12 +104,8 @@ async function handleUserBooking(event) {
     }
 }
 
-// --- Tab and Content Functions ---
 
-/**
- * Handles switching visibility between the main tabs.
- * @param {string} tabName - The name of the tab to activate.
- */
+ 
 async function switchTab(tabName) {
     document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -159,9 +132,7 @@ async function switchTab(tabName) {
         }
     }
 }
-/**
- * Fetches and displays the user's ride history.
- */
+
 async function fetchRideHistory() {
     const historyBody = document.getElementById('ride-history-body');
     try {
@@ -191,9 +162,7 @@ async function fetchRideHistory() {
     }
 }
 
-/**
- * Fetches the 'About Us' and 'Contact Us' content from the API.
- */
+
 async function fetchSiteContent() {
     if (siteContent) return siteContent;
     try {
@@ -254,9 +223,7 @@ function addSuggestionButtons() {
     }
     destSuggestionDiv.innerHTML = createSuggestionHtml('book-destination');
 }
-/**
- * Initializes Google Places Autocomplete.
- */
+
 function initAutocomplete() {
     const pickupInput = document.getElementById('book-pickup');
     const destinationInput = document.getElementById('book-destination');
@@ -285,17 +252,14 @@ async function populateCarTypes() {
         const carTypes = await response.json();
         if (!response.ok) throw new Error('API Error');
 
-        // Clear the "Loading..." message
         carTypeSelect.innerHTML = '';
 
         if (carTypes.length === 0) {
             carTypeSelect.innerHTML = '<option value="">No cars available</option>';
         } else {
-            // Create and add a new option for each car type
             carTypes.forEach(type => {
                 const option = document.createElement('option');
                 option.value = type.toLowerCase();
-                // Capitalize the first letter for display (e.g., 'sedan' becomes 'Sedan')
                 option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
                 carTypeSelect.appendChild(option);
             });
@@ -306,7 +270,6 @@ async function populateCarTypes() {
     }
 }
 
-// In user_portal.js, ADD this new function
 
 async function makeUserPortalApiCall(method, endpoint, body) {
     const options = {
@@ -319,14 +282,12 @@ async function makeUserPortalApiCall(method, endpoint, body) {
 
     const response = await fetch(endpoint, options);
 
-    // This is the crucial check. If the server redirected us, it means the session is expired.
     if (response.redirected) {
         alert("Your session has expired. Please log in again.");
-        window.location.href = response.url; // Redirect to the login page
-        throw new Error("Session expired"); // Stop further execution
+        window.location.href = response.url;
+        throw new Error("Session expired"); 
     }
 
-    // This check also prevents the error by making sure the response is actually JSON.
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Received non-JSON response from server. Check for server errors.");
