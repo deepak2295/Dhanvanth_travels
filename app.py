@@ -14,6 +14,7 @@ import traceback
 import qrcode
 import pytz
 import smtplib
+from decimal import Decimal
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -886,38 +887,27 @@ def delete_booking_api(ride_id):
 def download_invoice(ride_id):
     ride = get_ride_by_id(ride_id)
     if not ride:
-        print(f"DEBUG: Ride with ID {ride_id} not found.")
         return jsonify({"error": "Ride not found"}), 404
+
+    # The fix: Convert the float '0.05' to a Decimal object
+    tax_rate = Decimal('0.05')
+    fare_decimal = Decimal(str(ride['fare'])) # Ensure fare is a Decimal
+
+    tax_amount = round(fare_decimal * tax_rate, 2)
+    total_amount = round(fare_decimal * (Decimal('1.0') + tax_rate), 2)
 
     invoice_data = {
         "invoice_no": ride['id'],
-        "customer_name": ride['customer_name'] if ride['customer_name'] else "N/A",
+        "customer_name": ride.get('customer_name', "N/A"),
         "customer_address": "C-904, ALEMBIC URBAN FOREST, CHANNASANDRA", 
-        "trips": [{"description": f"{ride['pickup']} -> {ride['destination']}", "amount": ride['fare']}],
-        "subtotal": ride['fare'],
-        "discount": 0.0, 
+        "trips": [{"description": f"{ride['pickup']} -> {ride['destination']}", "amount": fare_decimal}],
+        "subtotal": fare_decimal,
+        "discount": Decimal('0.0'), 
         "coupon_code": "",
-        "tax": round(ride['fare'] * 0.05, 2),
-        "total": round(ride['fare'] * 1.05, 2),
-        "date": datetime.strptime(ride['start_time'], '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y') if ride['start_time'] else datetime.now().strftime('%d/%m/%Y')
+        "tax": tax_amount,
+        "total": total_amount,
+        "date": datetime.strptime(ride['start_time'], '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y') if ride.get('start_time') else datetime.now().strftime('%d/%m/%Y')
     }
-
-    filename = f"invoice_{ride_id}.pdf"
-    invoice_dir = os.path.join(BASE_DIR, 'invoices')
-    os.makedirs(invoice_dir, exist_ok=True) 
-    filepath = generate_invoice(invoice_data, filename=filename)
-
-    print(f"DEBUG: Attempting to serve invoice from directory: {invoice_dir}")
-    print(f"DEBUG: Attempting to serve invoice file: {filename}")
-
-    if not os.path.exists(filepath):
-        print(f"ERROR: Invoice file not found at {filepath}")
-        return jsonify({"error": "Invoice file not found on server."}), 500
-
-    response = send_from_directory(directory=invoice_dir, path=filename, as_attachment=True)
-    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
-    response.headers["Content-Type"] = "application/pdf"
-    return response
 
 
 @app.route("/api/assigned_bookings", methods=["GET"])
@@ -1553,21 +1543,24 @@ def webhook():
             elif session.get("state") == "awaiting_booking_time":
                 try:
                     booking_time_str = text.upper()
-                    booking_time = datetime.strptime(booking_time_str, "%I:%M %p").time() if "AM" in booking_time_str or "PM" in booking_time_str else datetime.strptime(booking_time_str, "%H:%M").time()
+                    if "AM" in booking_time_str or "PM" in booking_time_str:
+                        booking_time = datetime.strptime(booking_time_str, "%I:%M %p").time()
+                    else:
+                        booking_time = datetime.strptime(booking_time_str, "%H:%M").time()
+                    
+                    # FIX: Correctly set timezone to IST for comparison
                     booking_datetime = IST.localize(datetime.strptime(session["booking_date"], "%Y-%m-%d").replace(hour=booking_time.hour, minute=booking_time.minute))
                     
+                    # FIX: Replaced buggy logic with a clear check
                     if booking_datetime < datetime.now(IST):
-                        booking_datetime += timedelta(days=1)
-                        session["booking_date"] = booking_datetime.date().isoformat()
-
-                    if booking_datetime < datetime.now(IST):
-                        send_message(phone, "❌ That time is still in the past. Please enter a future time.")
+                        send_message(phone, "❌ That time is in the past. Please enter a future time.")
                     else:
                         session["start_time"] = booking_datetime.isoformat()
                         session["state"] = "awaiting_pickup"
-                        send_message(phone, "📍 Please send detailed pickup location./n example: /n > send your current location directly /n > building number, street name, locality")
+                        send_message(phone, "📍 Please send detailed pickup location.\n example: \n > send your current location directly \n > building number, street name, locality")
                 except ValueError:
                     send_message(phone, "❌ Invalid time format. Please use HH:MM AM/PM or 24-hour format.")
+
 
             elif session.get("state") == "awaiting_pickup":
                 session["pickup"] = correct_location(text)
