@@ -1513,7 +1513,7 @@ def webhook():
                 rides = get_rides_by_user_phone(user_phone=phone)
                 message = "You have no recent bookings." if not rides else "Here are your last two bookings:\n"
                 for ride in rides:
-                    ride_time = ride['start_time'].strftime('%d %b, %Y at %I:%M %p')
+                    ride_time = ride['start_time'].strftime('%d %b, %Y at %I:%M %p') if ride.get('start_time') else 'N/A'
                     message += f"\n--- Ride ID: {ride['id']} ---\nFrom: {ride['pickup']}\nTo: {ride['destination']}\nDate: {ride_time}\nStatus: {ride['status'].title()}\n"
                 send_message(phone, message)
                 send_button_message(phone, "What would you like to do next?", [{"id": "book_ride", "title": "Book Another Ride"}, {"id": "fare_info", "title": "Fare Info"}])
@@ -1561,7 +1561,6 @@ def webhook():
                 except ValueError:
                     send_message(phone, "❌ Invalid time format. Please use HH:MM AM/PM or 24-hour format.")
 
-
             elif session.get("state") == "awaiting_pickup":
                 session["pickup"] = correct_location(text)
                 session["state"] = "awaiting_destination"
@@ -1575,7 +1574,7 @@ def webhook():
                     session["state"] = "awaiting_intent"
                 else:
                     session["state"] = "awaiting_car_type"
-                    pricing_info = "\n".join([f"- {p['vehicle_type'].title()}: ₹{p['price_per_km']:.2f}/km" for p in get_all_pricing() if p['vehicle_type'] in car_types])
+                    pricing_info = "\n".join([f"- {p['vehicle_type'].title()}*: ₹{p['price_per_km']:.2f}/km" for p in get_all_pricing() if p['vehicle_type'] in car_types])
                     btns = [{"id": f"car_{c.lower()}", "title": c.title()} for c in car_types]
                     send_button_message(phone, f"🚗 Choose your car type:\n\n{pricing_info}", btns)
 
@@ -1645,8 +1644,9 @@ def webhook():
             save_chat_session(phone, session)
             return "ok", 200
 
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            send_message(phone, "Oops! An error occurred on our end. Please try again or contact support.")
             return "ok", 200
 
 if __name__ == "__main__":
